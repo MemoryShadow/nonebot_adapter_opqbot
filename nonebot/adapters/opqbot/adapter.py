@@ -186,43 +186,44 @@ class Adapter(BaseAdapter):
         """
         # 处理事件, 将OPQBot格式的数据簇转为Mirai格式的消息列表
         MsgSegment: list = []
-        MsgData = event['CurrentPacket']['EventData']['MsgBody']
-        if 'Content' in MsgData and MsgData['Content'] is not None:
-            MsgSegment.append({
-                    "type": "Plain",
-                    "text": MsgData['Content']
-                })
-        if 'Voice' in MsgData and MsgData['Voice'] is not None:
-            MsgSegment.append({
-                    "type": "Voice",
-                    "voiceId": MsgData['Voice']['FileMd5'],
-                    "url": MsgData['Voice']['Url'],
-                    "path": None,
-                    "base64": None,
-                    "length": MsgData['Voice']['FileSize']
-                })
-        if 'AtUinLists' in MsgData and MsgData['AtUinLists'] is not None:
-            for item in MsgData['AtUinLists']:
+        if event['CurrentPacket']['EventData']['MsgBody'] is not None:
+            MsgData = event['CurrentPacket']['EventData']['MsgBody']
+            if 'Content' in MsgData and MsgData['Content'] is not None and MsgData['Content'] != '':
                 MsgSegment.append({
-                    "type": "At",
-                    "target": item['Uin'],
-                    "display": item['Nick']
-                })
-        if 'Images' in MsgData and MsgData['Images'] is not None:
-            for item in MsgData['Images']:
+                        "type": "Plain",
+                        "text": MsgData['Content']
+                    })
+            if 'Voice' in MsgData and MsgData['Voice'] is not None:
                 MsgSegment.append({
-                    "type": "Image",
-                    "imageId": item['FileId'],
-                    "url": item['Url'],
-                    "path": None,
-                    "base64": None
-                })
-        
-        event['CurrentPacket']['MsgBody'] = MsgSegment
+                        "type": "Voice",
+                        "voiceId": MsgData['Voice']['FileMd5'],
+                        "url": MsgData['Voice']['Url'],
+                        "path": None,
+                        "base64": None,
+                        "length": MsgData['Voice']['FileSize']
+                    })
+            if 'AtUinLists' in MsgData and MsgData['AtUinLists'] is not None:
+                for item in MsgData['AtUinLists']:
+                    MsgSegment.append({
+                        "type": "At",
+                        "target": item['Uin'],
+                        "display": item['Nick']
+                    })
+            if 'Images' in MsgData and MsgData['Images'] is not None:
+                for item in MsgData['Images']:
+                    MsgSegment.append({
+                        "type": "Image",
+                        "imageId": item['FileId'],
+                        "url": item['Url'],
+                        "path": None,
+                        "base64": None
+                    })
+
+        event['CurrentPacket']['EventData']['MsgBody'] = MsgSegment
         asyncio.create_task(process_event(
             bot,
             event=Event.new({
-                **event['CurrentPacket'],
+                **event['CurrentPacket']['EventData'],
                 "type": event['CurrentPacket']['EventName'],
                 "self_id": bot.self_id,
                 "messageChain": MsgSegment

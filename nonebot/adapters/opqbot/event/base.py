@@ -11,6 +11,7 @@ from nonebot.adapters import Event as BaseEvent
 from nonebot.adapters import Message as BaseMessage
 
 from .. import log
+from ..message import MessageChain
 
 
 class UserPermission(str, Enum):
@@ -79,13 +80,6 @@ class EventCenter(BaseModel):
     Tips: Optional[str]
 
 
-# 在这里描述一套数据结构, 这套数据结构要和实际传过来的数据保持一致
-class EventData(BaseModel):
-    MsgHead: MsgHead
-    MsgBody: MsgBody
-    Event: EventCenter = Field(None, alias='EventCenter')
-
-
 class GroupEventData(BaseModel):
     ActorUid: str
     ActorUidNick: str
@@ -136,7 +130,7 @@ class Event(BaseEvent):
         此事件类的工厂函数, 能够通过事件数据选择合适的子类进行序列化
         mirai通过这type来标注事件类型, 对于OPQBot则为EventName
         """
-        EventName = data['EventName']
+        EventName = data['type']
         log.debug(data.__str__())
 
         def all_subclasses(cls: Type[Event]):

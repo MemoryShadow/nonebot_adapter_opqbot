@@ -3,7 +3,7 @@ from nonebot.typing import overrides
 from pydantic import BaseModel, Field
 from typing import Any, Literal, Optional
 
-from .base import Event, EventData, GroupEventData, GroupInfoModel, UserPermission
+from .base import Event, GroupEventData, GroupInfoModel, UserPermission
 from .message import MessageChain
 
 
@@ -16,7 +16,7 @@ class NoticeEvent(Event):
 
 class MuteEvent(NoticeEvent):
     """禁言类事件基类"""
-    operator: EventData
+    operator: GroupEventData
 
 
 class BotMuteEvent(MuteEvent):
@@ -32,20 +32,20 @@ class BotUnmuteEvent(MuteEvent):
 class MemberMuteEvent(MuteEvent):
     """群成员被禁言事件(该成员不是Bot)"""
     duration_seconds: int = Field(alias='durationSeconds')
-    member: EventData
-    operator: Optional[EventData] = None
+    member: GroupEventData
+    operator: Optional[GroupEventData] = None
 
 
 class MemberUnmuteEvent(MuteEvent):
     """群成员被取消禁言事件(该成员不是Bot)"""
-    member: EventData
-    operator: Optional[EventData] = None
+    member: GroupEventData
+    operator: Optional[GroupEventData] = None
 
 
 class BotJoinGroupEvent(NoticeEvent):
     """Bot加入了一个新群"""
     group: GroupInfoModel
-    invitor: Optional[EventData]
+    invitor: Optional[GroupEventData]
 
 
 class BotLeaveEventActive(NoticeEvent):
@@ -56,28 +56,28 @@ class BotLeaveEventActive(NoticeEvent):
 class BotLeaveEventKick(NoticeEvent):
     """Bot被踢出一个群"""
     group: GroupInfoModel
-    operator: Optional[EventData]
+    operator: Optional[GroupEventData]
 
 
 class BotLeaveEventDisband(NoticeEvent):
     """Bot因群主解散群而退出群"""
     group: GroupInfoModel
-    operator: Optional[EventData]
+    operator: Optional[GroupEventData]
 
 
 class ON_EVENT_GROUP_JOIN(NoticeEvent):
     """新人入群的事件"""
-    EventData: EventData
+    EventData: GroupEventData
 
 
 class MemberLeaveEventKick(NoticeEvent):
     """成员被踢出群（该成员不是Bot）"""
-    EventData: EventData
+    EventData: GroupEventData
 
 
 class ON_EVENT_GROUP_EXIT(NoticeEvent):
     """成员主动离群（该成员不是Bot）"""
-    EventData: EventData
+    EventData: GroupEventData
 
 
 class ON_EVENT_GROUP_SYSTEM_MSG_NOTIFY(NoticeEvent):
@@ -86,7 +86,7 @@ class ON_EVENT_GROUP_SYSTEM_MSG_NOTIFY(NoticeEvent):
 
 class ON_EVENT_GROUP_INVITE(NoticeEvent):
     """邀请事件"""
-    EventData: EventData
+    EventData: GroupEventData
 
 
 class GroupRecallEvent(NoticeEvent):
@@ -95,7 +95,7 @@ class GroupRecallEvent(NoticeEvent):
     message_id: int = Field(alias='messageId')
     time: int
     group: GroupInfoModel
-    operator: Optional[EventData] = None
+    operator: Optional[GroupEventData] = None
 
 
 class FriendRecallEvent(NoticeEvent):
@@ -111,7 +111,7 @@ class GroupStateChangeEvent(NoticeEvent):
     origin: Any
     current: Any
     group: GroupInfoModel
-    operator: Optional[EventData] = None
+    operator: Optional[GroupEventData] = None
 
 
 class GroupNameChangeEvent(GroupStateChangeEvent):
@@ -153,8 +153,8 @@ class GroupAllowMemberInviteEvent(GroupStateChangeEvent):
 
 class MemberStateChangeEvent(NoticeEvent):
     """群成员变化事件基类"""
-    member: EventData
-    operator: Optional[EventData] = None
+    member: GroupEventData
+    operator: Optional[GroupEventData] = None
 
 
 class MemberCardChangeEvent(MemberStateChangeEvent):
@@ -229,7 +229,7 @@ class action(Enum):
 
 class MemberHonorChangeEvent(NoticeEvent):
     """群员称号改变"""
-    member: EventData
+    member: GroupEventData
     action: action
     honor: str
 
@@ -254,5 +254,5 @@ class CommandExecutedEvent(NoticeEvent):
     """命令被执行"""
     name: str
     friend: Optional[friend]
-    member: Optional[EventData]
+    member: Optional[GroupEventData]
     args: MessageChain

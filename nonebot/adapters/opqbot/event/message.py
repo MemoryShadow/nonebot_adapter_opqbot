@@ -7,8 +7,8 @@ from nonebot.typing import overrides
 from ..message import MessageChain
 from .base import (
     Event,
-    EventData,
-    EventData,
+    MsgBody,
+    EventCenter,
     GroupInfoModel,
     MsgHead,
     OtherChatInfo,
@@ -33,12 +33,10 @@ class MessageQuote(BaseModel):
 
 class MessageEvent(Event):
     """消息事件基类"""
+    MsgHead: MsgHead
+    MsgBody: MessageChain = Field(alias='messageChain')
+    Event: EventCenter = Field(None, alias='EventCenter')
     message_chain: MessageChain = Field(alias='messageChain')
-    source: Optional[MessageSource] = None
-    sender: Any
-    quote: Optional[MessageQuote] = None
-    EventName: str
-    EventData: EventData
 
     @overrides(Event)
     def get_type(self) -> Literal["message"]:  # noqa
@@ -62,15 +60,14 @@ class MessageEvent(Event):
 
 class ON_EVENT_GROUP_NEW_MSG(MessageEvent):
     """群消息事件"""
-    to_me: bool = False
 
     @overrides(MessageEvent)
     def get_session_id(self) -> str:
-        return f'group_{self.EventData.MsgHead.group.GroupCode}_{self.EventData.MsgHead.SenderUin}'
+        return f'group_{self.MsgHead.group.GroupCode}_{self.MsgHead.SenderUin}'
 
     @overrides(MessageEvent)
     def get_user_id(self) -> str:
-        return str(self.EventData.MsgHead.SenderUin)
+        return str(self.MsgHead.SenderUin)
 
     @overrides(MessageEvent)
     def is_tome(self) -> bool:
@@ -101,11 +98,11 @@ class ON_EVENT_FRIEND_NEW_MSG(MessageEvent):
 
     @overrides(MessageEvent)
     def get_user_id(self) -> str:
-        return str(self.EventData.MsgHead.SenderUin)
+        return str(self.MsgHead.SenderUin)
 
     @overrides(MessageEvent)
     def get_session_id(self) -> str:
-        return f'friend_{self.EventData.MsgHead.SenderUin}'
+        return f'friend_{self.MsgHead.SenderUin}'
 
     @overrides(MessageEvent)
     def is_tome(self) -> bool:
@@ -131,7 +128,7 @@ class FriendSyncMessage(MessageEvent):
 
 class TempMessage(MessageEvent):
     """临时会话消息事件"""
-    sender: EventData
+    sender: PrivateChatInfo
 
     @overrides(MessageEvent)
     def get_user_id(self) -> str:
@@ -148,7 +145,7 @@ class TempMessage(MessageEvent):
 
 class TempSyncMessage(MessageEvent):
     """同步临时会话消息事件"""
-    sender: EventData = Field(alias="subject")
+    sender: PrivateChatInfo = Field(alias="subject")
 
     @overrides(MessageEvent)
     def get_user_id(self) -> str:
