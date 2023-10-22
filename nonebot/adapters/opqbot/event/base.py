@@ -171,7 +171,7 @@ class Event(BaseEvent):
                 # 最终返回一个 Model 类型的对象。如果类型不匹配或转换失败，将抛出相应的异常。
                 return event_class.parse_obj(data)
             except ValidationError as e:
-                log.info(
+                log.error(
                     f'Failed to parse {data} to class {event_class.__name__}: '
                     f'{e.errors()!r}. Fallback to parent class.')
                 event_class = event_class.__base__  # type: ignore

@@ -81,6 +81,7 @@ def process_nick(bot: "Bot", event: ON_EVENT_GROUP_NEW_MSG) -> ON_EVENT_GROUP_NE
 
 
 async def process_event(bot: "Bot", event: Event) -> None:
+    log.debug(f'$process_event: event: {event}[{type(event)}]')
     if isinstance(event, MessageEvent):
         event = process_source(bot, event)
         event = process_quote(bot, event)

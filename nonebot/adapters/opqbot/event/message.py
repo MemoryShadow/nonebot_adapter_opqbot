@@ -37,6 +37,8 @@ class MessageEvent(Event):
     source: Optional[MessageSource] = None
     sender: Any
     quote: Optional[MessageQuote] = None
+    EventName: str
+    EventData: EventData
 
     @overrides(Event)
     def get_type(self) -> Literal["message"]:  # noqa
@@ -60,7 +62,6 @@ class MessageEvent(Event):
 
 class ON_EVENT_GROUP_NEW_MSG(MessageEvent):
     """群消息事件"""
-    EventData: EventData
     to_me: bool = False
 
     @overrides(MessageEvent)
@@ -97,7 +98,6 @@ class GroupSyncMessage(MessageEvent):
 
 class ON_EVENT_FRIEND_NEW_MSG(MessageEvent):
     """好友消息事件"""
-    EventData: EventData
 
     @overrides(MessageEvent)
     def get_user_id(self) -> str:
