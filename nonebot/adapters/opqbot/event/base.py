@@ -27,7 +27,7 @@ class UserPermission(str, Enum):
     OWNER = 'OWNER'
     ADMINISTRATOR = 'ADMINISTRATOR'
     MEMBER = 'MEMBER'
-    
+
 
 class GroupInfoModel(BaseModel):
     GroupCode: int
@@ -37,7 +37,8 @@ class GroupInfoModel(BaseModel):
     GroupRank: int
     GroupType: int
     GroupName: str
-    
+
+
 class MsgHead(BaseModel):
     FromUin: int
     FromUid: str
@@ -56,6 +57,7 @@ class MsgHead(BaseModel):
     group: Optional[GroupInfoModel] = Field(None, alias='GroupInfo')
     GroupInfo: Optional[GroupInfoModel] = Field(None, alias='GroupInfo')
     C2CTempMessageHead: None
+
 
 class MsgBody(BaseModel):
     SubMsgType: int
@@ -94,6 +96,7 @@ class GroupEventData(BaseModel):
     ReqUidNick: str
     Status: int
 
+
 class PrivateChatInfo(BaseModel):
     id: int
     nickname: str
@@ -131,7 +134,7 @@ class Event(BaseEvent):
         mirai通过这type来标注事件类型, 对于OPQBot则为EventName
         """
         EventName = data['type']
-        log.debug(data.__str__())
+        log.debug(f'$new@ Received data from: {data.__str__()}')
 
         def all_subclasses(cls: Type[Event]):
             """通过反射返回一个集合, 这个集合中包含了所有的子类
@@ -159,10 +162,10 @@ class Event(BaseEvent):
         # 如果找到了合适的子类, 就将这个事件交给这个子类解析. 如果解析失败, 则尝试使用其父类进行解析直到解析成功或者已经尝试到 Event 类为止.
         while event_class and issubclass(event_class, Event):
             try:
-                # 调用子类的parse_obj方法, 这个方法是在基类BaseModel中被定义的: 
-                # 主要目的是将一个对象(传入的事件模型)转化为指定的 Model 类型的对象。
-                # 该函数首先确保根级别的对象是字典类型，然后将字典中的键值对作为关键字参数传递给指定的 Model 类的构造函数，
-                # 最终返回一个 Model 类型的对象。如果类型不匹配或转换失败，将抛出相应的异常。
+                # 调用子类的 parse_obj 方法, 这个方法是在基类 BaseModel 中被定义的: 
+                # 主要目的是将一个对象(传入的事件模型)转化为指定的 Model 类型的对象.
+                # 该函数首先确保根级别的对象是字典类型, 然后将字典中的键值对作为关键字参数传递给指定的 Model 类的构造函数,
+                # 最终返回一个 Model 类型的对象. 如果类型不匹配或转换失败, 将抛出相应的异常.
                 return event_class.parse_obj(data)
             except ValidationError as e:
                 log.error(

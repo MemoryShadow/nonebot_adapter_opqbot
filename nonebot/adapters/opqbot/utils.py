@@ -10,12 +10,132 @@ from nonebot.utils import DataclassEncoder
 from .exception import ApiNotAvailable
 
 from .event import Event, ON_EVENT_GROUP_NEW_MSG, MessageEvent, MessageSource, MessageQuote
-from .message import MessageSegment, MessageType
+from .message import MessageSegment, MessageType, MessageChain
 from . import log
 
 if TYPE_CHECKING:
     from .bot import Bot
 
+
+
+def api_name_to_control_signal(api_name: str) -> dict:
+    data: dict = {
+        'send_friend_message': {
+            'APIPath': 'v1/LuaApiCaller',
+            'ToType': 1
+        },
+        'send_group_message': {
+            'APIPath': 'v1/LuaApiCaller',
+            'ToType': 2
+        },
+        'send_private_message': {
+            'APIPath': 'v1/LuaApiCaller',
+            'ToType': 3
+        },
+    }
+    if api_name in data:
+        return data[api_name]
+    return {}
+
+def format(String:str, Env:dict) -> str:
+    """这个函数按照String中预留的空位, 从Env中取出对应请求字段的值提交给这个字符串
+        e.g. 
+            String: ab{cd}efgh{i}jk
+            Env: {"cd": "233", "i": "qwq", "fg": "emmm"}
+            ReturnStr: ab233efghqwqjk
+
+            String: ab{cd}efgh{i}jk
+            Env: {"cd": "233", "ddd": "qwq", "fg": "emmm"}
+            ReturnStr: ab233efgh{i}jk
+        
+
+    Args:
+        String (str): 需要被合成的字符串
+        Env (dict): 需要合成的环境变量
+
+    Returns:
+        str: 被合成后的字符串
+    """
+    FetchRequestField: re.Pattern = re.compile('\{([a-z_][a-z0-9_]*)\}', re.I)
+    PushField = {}
+    for RequestField in FetchRequestField.findall(String):
+        PushField[RequestField] = '{' + f'{RequestField}' + '}' if RequestField not in Env else Env[RequestField]
+    return String.format(**PushField)
+
+def Message_OPQBot_to_mirai(MsgData: dict) -> MessageChain:
+    MsgSegment: MessageChain = []
+    if 'Content' in MsgData and MsgData['Content'] is not None and MsgData['Content'] != '':
+        MsgSegment.append({
+                    "type": "Plain",
+                    "text": MsgData['Content']
+                })
+    if 'Voice' in MsgData and MsgData['Voice'] is not None:
+        MsgSegment.append({
+                "type": "Voice",
+                "voiceId": MsgData['Voice']['FileMd5'],
+                "url": MsgData['Voice']['Url'],
+                "path": None,
+                "base64": None,
+                "length": MsgData['Voice']['FileSize']
+            })
+    if 'AtUinLists' in MsgData and MsgData['AtUinLists'] is not None:
+        for item in MsgData['AtUinLists']:
+            MsgSegment.append({
+                "type": "At",
+                "target": item['Uin'],
+                "display": item['Nick']
+            })
+    if 'Images' in MsgData and MsgData['Images'] is not None:
+        for item in MsgData['Images']:
+            MsgSegment.append({
+                "type": "Image",
+                "imageId": item['FileId'],
+                "url": item['Url'],
+                "path": None,
+                "base64": None
+            })
+    return MsgSegment
+
+def Message_mirai_to_OPQBot(MsgData: MessageChain) -> dict:
+    MsgSegment: dict = {}
+    for seg in MsgData:
+        log.debug(f'$Message_mirai_to_OPQBot@ seg.type: {seg.type}')
+        log.debug(f'$Message_mirai_to_OPQBot@ seg.data: {seg.data}')
+        if seg.type == MessageType.PLAIN:
+            # 倘若没有'Content'这个对象, 就初始化
+            if 'Content' not in MsgData:
+                MsgSegment['Content'] = ''
+            MsgSegment['Content'] = f"{MsgSegment['Content']}{seg.data['text']}"
+        if seg.type == MessageType.VOICE:
+            MsgSegment['Voice'] = {
+                "FileMd5": seg.data['voiceId'],
+                "FileSize": seg.data['length'],
+                "FileToken": seg.data['url']
+            }
+        # TODO: 这里需要再研究一下
+        # if seg.type == MessageType.QUOTE:
+        #     MsgSegment['ReplyTo'] = {
+        #         "MsgSeq": seg.data['id'],
+        #         "MsgTime": 1683025345,
+        #         "MsgUid": 72057595189354740
+        #     }
+        if seg.type == MessageType.AT:
+            # 倘若没有'AtUinLists'这个对象, 就初始化
+            if 'AtUinLists' not in MsgData:
+                MsgSegment['AtUinLists'] = []
+            MsgSegment['AtUinLists'].append({
+                "Nick": seg.data['display'],
+                "Uin": seg.data['target']
+            })
+        if seg.type == MessageType.IMAGE:
+            # 倘若没有'Images'这个对象, 就初始化
+            if 'Images' not in MsgData:
+                MsgSegment['Images'] = []
+            MsgSegment['Images'].append({
+                "FileId": seg.data['imageId']
+            })
+    log.debug(f"$Message_mirai_to_OPQBot@ MsgSegment: {MsgSegment}")
+    return MsgSegment
 
 def snake_to_camel(name: str) -> str:
     """将蛇形命名转换为驼峰命名, 除了以指定字符串开头的
@@ -36,6 +156,16 @@ def snake_to_camel(name: str) -> str:
 
 
 def process_source(bot: "Bot", event: MessageEvent) -> MessageEvent:
+    """合并转发的消息记录
+    这个函数检查这个合并转发消息, 将其解析后放入source里去
+
+    Args:
+        bot (Bot): Bot对象本身
+        event (MessageEvent): 等待被处理的消息事件
+
+    Returns:
+        MessageEvent: 将处理后的消息返回
+    """
     source = event.message_chain.extract_first(MessageType.SOURCE)
     if source is not None:
         event.source = MessageSource.parse_obj(source.data)
@@ -43,6 +173,16 @@ def process_source(bot: "Bot", event: MessageEvent) -> MessageEvent:
 
 
 def process_quote(bot: "Bot", event: Union[MessageEvent, ON_EVENT_GROUP_NEW_MSG]) -> MessageEvent:
+    """处理问候中传入的消息
+    这个函数检查对方是否在回复Bot发送的消息, 如果是, 就将to_me设为True, 并将引用的信息传入event.quote
+
+    Args:
+        bot (Bot): Bot对象本身
+        event (Union[MessageEvent, ON_EVENT_GROUP_NEW_MSG]): 等待被处理的消息事件
+
+    Returns:
+        MessageEvent: 将处理后的消息返回
+    """
     quote = event.message_chain.extract_first(MessageType.QUOTE)
     if quote is not None:
         event.quote = MessageQuote.parse_obj(quote.data)
@@ -52,6 +192,16 @@ def process_quote(bot: "Bot", event: Union[MessageEvent, ON_EVENT_GROUP_NEW_MSG]
 
 
 def process_at(bot: "Bot", event: ON_EVENT_GROUP_NEW_MSG) -> ON_EVENT_GROUP_NEW_MSG:
+    """处理问候中传入的消息队列
+    它遍历消息队列中每一条消息, 找到艾特自己的消息, 从队列中移除并将to_me设为True
+
+    Args:
+        bot (Bot): Bot对象本身
+        event (ON_EVENT_GROUP_NEW_MSG): 等待被处理的消息事件
+
+    Returns:
+        ON_EVENT_GROUP_NEW_MSG: 将处理后的消息返回
+    """
     c = 0
     for msg in event.message_chain:
         if (msg.type == MessageType.AT) and (msg.data.get('target', '') == event.self_id):
@@ -59,12 +209,24 @@ def process_at(bot: "Bot", event: ON_EVENT_GROUP_NEW_MSG) -> ON_EVENT_GROUP_NEW_
             event.message_chain.pop(c)
             break
         c += 1
+    # 避免message_chain为空
     if not event.message_chain:
         event.message_chain.append(MessageSegment.plain(""))
     return event
 
 
 def process_nick(bot: "Bot", event: ON_EVENT_GROUP_NEW_MSG) -> ON_EVENT_GROUP_NEW_MSG:
+    """处理问候中传入的消息
+    这个函数检查对方是否在伪艾特Bot, 如果是, 就将to_me设为True, 并将伪艾特前的内容截去
+    这样只需要处理艾特后的内容
+
+    Args:
+        bot (Bot): Bot对象本身
+        event (ON_EVENT_GROUP_NEW_MSG): 等待被处理的消息事件
+
+    Returns:
+        ON_EVENT_GROUP_NEW_MSG: 返回处理后的事件
+    """
     plain = event.message_chain.extract_first(MessageType.PLAIN)
     if plain is not None:
         if len(bot.config.nickname):
@@ -81,7 +243,13 @@ def process_nick(bot: "Bot", event: ON_EVENT_GROUP_NEW_MSG) -> ON_EVENT_GROUP_NE
 
 
 async def process_event(bot: "Bot", event: Event) -> None:
-    log.debug(f'$process_event: event: {event}[{type(event)}]')
+    """创建一个处理过程, 对传入的问候创建额外的处理流程
+
+    Args:
+        bot (Bot): 此事件所属的Bot
+        event (Event): 此事件的内容
+    """
+    log.debug(f'$process_event@ event: {event}[{type(event)}]')
     if isinstance(event, MessageEvent):
         event = process_source(bot, event)
         event = process_quote(bot, event)

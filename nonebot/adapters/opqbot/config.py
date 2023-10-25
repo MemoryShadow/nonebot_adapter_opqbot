@@ -23,6 +23,7 @@ class Config(BaseModel):
     opqbot_mountpoint: Optional[str] = "ws"
     opqbot_clusterinfo: Optional[str] = "v1/clusterinfo"
     opqbot_api: Optional[str] = "v1/LuaApiCaller"
+    opqbot_api_protocol: Optional[str] = "http"
     opqbot_upload: Optional[str] = "v1/upload"
     # 这里不应该是一个可选项, 因为OPQ的请求调用都要使用这个
     opqbot_qq: str

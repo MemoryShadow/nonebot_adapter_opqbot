@@ -35,7 +35,7 @@ class MessageEvent(Event):
     """消息事件基类"""
     MsgHead: MsgHead
     MsgBody: MessageChain = Field(alias='messageChain')
-    Event: EventCenter = Field(None, alias='EventCenter')
+    Event: Optional[EventCenter] = Field(None)
     message_chain: MessageChain = Field(alias='messageChain')
 
     @overrides(Event)

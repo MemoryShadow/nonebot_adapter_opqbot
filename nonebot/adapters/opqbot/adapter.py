@@ -11,6 +11,7 @@ from nonebot.drivers import (
     URL,
     Driver,
     Request,
+    Response,
     WebSocket,
     ReverseDriver,
     ForwardDriver,
@@ -25,7 +26,8 @@ from .utils import (
     SyncIDStore,
     process_event,
     snake_to_camel,
-    OPQBotDataclassEncoder
+    OPQBotDataclassEncoder,
+    Message_OPQBot_to_mirai
 )
 
 class Adapter(BaseAdapter):
@@ -68,6 +70,7 @@ class Adapter(BaseAdapter):
                 isinstance(self.opqbot_config.opqbot_port, int),
                 isinstance(self.opqbot_config.opqbot_mountpoint, str),
                 isinstance(self.opqbot_config.opqbot_clusterinfo, str),
+                isinstance(self.opqbot_config.opqbot_api_protocol, str),
                 isinstance(self.opqbot_config.opqbot_api, str),
                 isinstance(self.opqbot_config.opqbot_upload, str),
                 isinstance(self.opqbot_config.opqbot_qq, str),
@@ -156,7 +159,7 @@ class Adapter(BaseAdapter):
                         while True:
                             # 等待事件传过来, 收到消息再丢给_event_handle处理
                             data = await ws.receive()
-                            log.debug(f"Received data from: {data}")
+                            log.debug(f"$_ws_client@ Received data from: {data}")
                             json_data = json.loads(data)
                             self._event_handle(bot, json_data)
                     except WebSocketClosed as e:
@@ -188,36 +191,7 @@ class Adapter(BaseAdapter):
         MsgSegment: list = []
         if event['CurrentPacket']['EventData']['MsgBody'] is not None:
             MsgData = event['CurrentPacket']['EventData']['MsgBody']
-            if 'Content' in MsgData and MsgData['Content'] is not None and MsgData['Content'] != '':
-                MsgSegment.append({
-                        "type": "Plain",
-                        "text": MsgData['Content']
-                    })
-            if 'Voice' in MsgData and MsgData['Voice'] is not None:
-                MsgSegment.append({
-                        "type": "Voice",
-                        "voiceId": MsgData['Voice']['FileMd5'],
-                        "url": MsgData['Voice']['Url'],
-                        "path": None,
-                        "base64": None,
-                        "length": MsgData['Voice']['FileSize']
-                    })
-            if 'AtUinLists' in MsgData and MsgData['AtUinLists'] is not None:
-                for item in MsgData['AtUinLists']:
-                    MsgSegment.append({
-                        "type": "At",
-                        "target": item['Uin'],
-                        "display": item['Nick']
-                    })
-            if 'Images' in MsgData and MsgData['Images'] is not None:
-                for item in MsgData['Images']:
-                    MsgSegment.append({
-                        "type": "Image",
-                        "imageId": item['FileId'],
-                        "url": item['Url'],
-                        "path": None,
-                        "base64": None
-                    })
+            MsgSegment = Message_OPQBot_to_mirai(MsgData)
 
         event['CurrentPacket']['EventData']['MsgBody'] = MsgSegment
         asyncio.create_task(process_event(
@@ -233,29 +207,40 @@ class Adapter(BaseAdapter):
     @overrides(BaseAdapter)
     async def _call_api(self, bot: Bot, api: str,
         subcommand: Optional[Literal['get', 'update']] = None, **data: Any) -> Any:
-        log.debug(f'$_call_api@ api: {api}, subcommand: {subcommand}')
-        sync_id = SyncIDStore.get_id()
-        # 一个小驼峰命名的API名称
-        api = snake_to_camel(api)
-        # 将键也转为驼峰命名
-        data = {snake_to_camel(k): v for k, v in data.items()}
-        body = {
-            'syncId': sync_id,
-            'command': api,
-            'subcommand': subcommand,
-            'content': {
-                **data,
+        log.debug(f'$_call_api@ api: {api}, data: {data}')
+        if 'origin' in data:
+            body = data['origin']
+        else:
+            # TODO: 不为origin信息, 就尝试识别api信息
+            body = {
+                "CgiCmd": "MessageSvc.PbSendMsg",
+                "CgiRequest": {
+                    "ToUin": 123456,
+                    "ToType": 2,
+                    "Content": "HelloWorld"
+                }
             }
-        }
-        
-        # TODO 这里要等回来的时候重写
-        # 取得本机器人对应的WS连接并返回, 但OPQ无法使用WS回传信息, 所以这里应该改成发送请求的形式.
-        await cast(WebSocket, self.connections[str(bot.self_id)]).send(
-            json.dumps(
-                body,
-                cls=OPQBotDataclassEncoder
-            )
+        # 发送数据
+        ApiUrl: str = f'{self.opqbot_config.opqbot_api_protocol}://{self.opqbot_config.opqbot_host}:{self.opqbot_config.opqbot_port}/{api}'
+        log.debug(f'$_call_api@ ApiUrl: {ApiUrl}')
+        request = Request(
+            method="POST",  # 请求方法
+            url=ApiUrl,  # 接口地址
+            # headers={
+            #     'Content-Type': 'application/json'
+            # },
+            params={
+                'funcname': 'MagicCgiCmd',
+                'timeout': 10,
+                'qq': f'{self.opqbot_config.opqbot_qq}'
+            },
+            json=body
         )
+        result: Response = await self.driver.request(request)
+        # TODO: 处理返回结果识别错误情况打印日志
+        log.debug(f'$_call_api@ result: {result} -> {str(result.content, "utf-8")}')
+        # 发送请求，返回结果
+        return result
 
         result: Dict[str, Any] = await SyncIDStore.fetch_response(
             sync_id, timeout=self.config.api_timeout)
